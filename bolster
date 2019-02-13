@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+
+from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime
+from subprocess import run
+from asyncio import get_event_loop
+from typing import List, Generator
+
+
+class ForwardDown:
+
+    def __init__(self):
+        '''
+        Add path to home directory and path to backup directory.
+        '''
+        self.home_dir = "/home/xxxxxxxxxxxx"
+        self.backup_dir = "/home/xxxxxxx/backups/"
+        self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        self.new_dir = self.backup_dir + self.timestamp + "/"
+
+    def get_dirs(self) -> List:
+        '''
+        Add home directories to backup here.
+        '''
+        try:
+            run(["mkdir " + self.new_dir], shell=True)
+            dirs = [
+                    "cherryTree",
+                    "keepass",
+                    "Pictures",
+                    "Documents",
+                    "minecraft",
+                    "pycharm_projects",
+                    "pen_tests"
+                    ]
+            dirs = [str(self.home_dir + d) for d in dirs]
+            return dirs
+        except Exception as e:
+            self.exceptor("Error! in get_dirs: ", e)
+
+
+    def get_opt_dirs(self):
+        '''
+        Add any /opt directories to backup here.
+        '''
+        try:
+            opt_dirs = ["burp_pro2"]
+            opt_dirs = [str("/opt/" + o) for o in opt_dirs]
+            return opt_dirs
+        except Exception as e:
+            self.exceptor("Error! in get_opt_dirs: ", e)
+
+
+    def tar_whole_dirs(self, dir_name: str):
+        try:
+            cmd = ("tar -Jcvf " + self.new_dir + dir_name + "_" +
+                   self.timestamp + ".tar.xz -C " + dir_name + " .")
+            run([cmd], shell=True)
+        except Exception as e:
+            self.exceptor("Error! in tar_whole_dirs: ", e)
+
+
+    async def tar_up_and_hash(self):
+        try:
+            cmd = ("tar -cvf "+ self.new_dir + "backup_all_home_" + self.timestamp + ".tar "
+                   + self.backup_dir + "*" + self.timestamp + "*")
+            run([cmd], shell=True)
+            hashcmd = ("sha256sum " + self.new_dir + "*" + self.timestamp +
+                    "* >> " + self.new_dir + "hashes_" + self.timestamp + ".txt")
+            run([hashcmd], shell=True)
+            run(["rm -rf " + self.new_dir + "*.tar.xz"], shell=True)
+            cmd = ("tar -cvf " + self.backup_dir + self.timestamp + ".tar "
+                   + "-C " + self.backup_dir + self.timestamp + " .")
+            run([cmd], shell=True)
+            run(["rm -rf " + self.backup_dir + self.timestamp], shell=True)
+        except Exception as e:
+            mes = "Error! in tar_up: "
+            self.exceptor(mes, e)
+
+
+    def exceptor(self, message: str, exception: Exception):
+        try:
+            mes = message + ": " + str(exception)
+            print(mes)
+            exit(1)
+        except Exception as e:
+            print("Exception Handler Failed: " + str(e))
+            exit(1)
+
+
+    def get_files(self) -> Generator:
+        try:
+            return (d for d in (self.get_opt_dirs() + self.get_dirs()))
+        except Exception as e:
+            mes = "Error! in get_files: "
+            self.exceptor(mes, e)
+            exit(1)
+
+
+    async def controller(self):
+        try:
+            with ProcessPoolExecutor(32) as pool:
+                pool.map(self.tar_whole_dirs, self.get_files())
+            await self.tar_up_and_hash()
+        except Exception as e:
+            self.exceptor("Error! in controller: ", e)
+
+
+def main():
+    try:
+        loop = get_event_loop()
+        loop.run_until_complete(loop.create_task(ForwardDown().controller()))
+    except Exception as e:
+        ForwardDown().exceptor("Error! in the loop: ", e)
+
+
+if __name__ == '__main__':
+    main()
